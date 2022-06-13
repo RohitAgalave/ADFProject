@@ -1,0 +1,18 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adfminiproject"
+		},
+		"SQLServerLS_connectionString": {
+			"value": ""
+		},
+		"AzureBlobStorageLS_connectionString": {
+			"value": ""
+		},
+		"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
+			"value": "/subscriptions/e15d0c75-6324-456e-901f-e24236ea4bf0/resourcegroups/TestEnvironment/providers/Microsoft.DataFactory/factories/adfmyadfdemo/integrationruntimes/SelfHostedIR"
+		}
+	}
+}
