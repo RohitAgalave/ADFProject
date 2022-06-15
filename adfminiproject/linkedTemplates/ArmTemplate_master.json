@@ -7,21 +7,17 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "adfminiproject"
 		},
-		"SQLServerLS_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'SQLServerLS'"
-		},
 		"AzureBlobStorageLS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureBlobStorageLS'"
 		},
+		"SQLServerLS_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'SQLServerLS'"
+		},
 		"AzureSqlDatabaseLS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureSqlDatabaseLS'"
-		},
-		"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
-			"type": "string",
-			"defaultValue": "/subscriptions/e15d0c75-6324-456e-901f-e24236ea4bf0/resourcegroups/TestEnvironment/providers/Microsoft.DataFactory/factories/adfmyadfdemo/integrationruntimes/SelfHostedIR"
 		},
 		"containerUri": {
 			"type": "string",
@@ -58,9 +54,6 @@
 					},
 					"SQLServerLS_connectionString": {
 						"value": "[parameters('SQLServerLS_connectionString')]"
-					},
-					"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
-						"value": "[parameters('SelfHostedIR_properties_typeProperties_linkedInfo_resourceId')]"
 					}
 				}
 			},

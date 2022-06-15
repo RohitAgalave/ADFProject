@@ -5,17 +5,14 @@
 		"factoryName": {
 			"value": "adfminiproject"
 		},
-		"SQLServerLS_connectionString": {
+		"AzureBlobStorageLS_connectionString": {
 			"value": ""
 		},
-		"AzureBlobStorageLS_connectionString": {
+		"SQLServerLS_connectionString": {
 			"value": ""
 		},
 		"AzureSqlDatabaseLS_connectionString": {
 			"value": ""
-		},
-		"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
-			"value": "/subscriptions/e15d0c75-6324-456e-901f-e24236ea4bf0/resourcegroups/TestEnvironment/providers/Microsoft.DataFactory/factories/adfmyadfdemo/integrationruntimes/SelfHostedIR"
 		}
 	}
 }

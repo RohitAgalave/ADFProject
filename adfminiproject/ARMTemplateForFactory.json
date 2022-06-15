@@ -7,75 +7,23 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "adfminiproject"
 		},
-		"SQLServerLS_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'SQLServerLS'"
-		},
 		"AzureBlobStorageLS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureBlobStorageLS'"
 		},
+		"SQLServerLS_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'SQLServerLS'"
+		},
 		"AzureSqlDatabaseLS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureSqlDatabaseLS'"
-		},
-		"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
-			"type": "string",
-			"defaultValue": "/subscriptions/e15d0c75-6324-456e-901f-e24236ea4bf0/resourcegroups/TestEnvironment/providers/Microsoft.DataFactory/factories/adfmyadfdemo/integrationruntimes/SelfHostedIR"
 		}
 	},
 	"variables": {
 		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
 	},
 	"resources": [
-		{
-			"name": "[concat(parameters('factoryName'), '/SelfHostedIR')]",
-			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "SelfHosted",
-				"typeProperties": {
-					"linkedInfo": {
-						"resourceId": "[parameters('SelfHostedIR_properties_typeProperties_linkedInfo_resourceId')]",
-						"authorizationType": "Rbac"
-					}
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLServerLS')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"parameters": {
-					"ServerName": {
-						"type": "String",
-						"defaultValue": "TMGLAP269"
-					},
-					"UserName": {
-						"type": "String",
-						"defaultValue": "Rohit"
-					},
-					"SqlPassword": {
-						"type": "String",
-						"defaultValue": "amol@6969"
-					}
-				},
-				"annotations": [],
-				"type": "SqlServer",
-				"typeProperties": {
-					"connectionString": "[parameters('SQLServerLS_connectionString')]"
-				},
-				"connectVia": {
-					"referenceName": "SelfHostedIR",
-					"type": "IntegrationRuntimeReference"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/integrationRuntimes/SelfHostedIR')]"
-			]
-		},
 		{
 			"name": "[concat(parameters('factoryName'), '/Pipeline_To_Take_Backup_And_Copy_Bulk_Tables')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
@@ -232,7 +180,13 @@
 										},
 										"sink": {
 											"type": "AzureSqlSink",
-											"writeBehavior": "insert",
+											"writeBehavior": "upsert",
+											"upsertSettings": {
+												"useTempDB": true,
+												"keys": [
+													"Id"
+												]
+											},
 											"sqlWriterUseTableLock": false,
 											"tableOption": "autoCreate",
 											"disableMetricsCollection": false
@@ -287,6 +241,485 @@
 									"typeProperties": {
 										"waitTimeInSeconds": 2
 									}
+								},
+								{
+									"name": "ScriptToGetColumnNames",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "AzureSqlDatabaseLS",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"parameters": [
+													{
+														"name": "tblName",
+														"type": "String",
+														"value": {
+															"value": "@item().name",
+															"type": "Expression"
+														},
+														"direction": "Input"
+													}
+												],
+												"type": "Query",
+												"text": "SELECT name FROM sys.columns WHERE object_id = OBJECT_ID(@tblName) "
+											}
+										]
+									}
+								},
+								{
+									"name": "Set variable1",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "ScriptToGetColumnNames",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "Columns",
+										"value": {
+											"value": "@activity('ScriptToGetColumnNames').output.resultSets[0].rows[0].name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Script_To_Get_All_Rows",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "ForEachTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "AzureSqlDatabaseLS",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": "select * from dbo.Customer"
+								}
+							]
+						}
+					},
+					{
+						"name": "ForEach1",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Script_To_Get_All_Rows",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Script_To_Get_All_Rows').output.resultSets[0].rows",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "SwitchActivity",
+									"type": "Switch",
+									"dependsOn": [
+										{
+											"activity": "SetCountryVar",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetIdVar",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetFirstNameVar",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetLastNameVar",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetCityVar",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										},
+										{
+											"activity": "SetPhoneVar",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"on": {
+											"value": "@variables('CountryName')",
+											"type": "Expression"
+										},
+										"cases": [
+											{
+												"value": "Mexico",
+												"activities": [
+													{
+														"name": "Script_To_Add_Mexico_Cust",
+														"type": "Script",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "AzureSqlDatabaseLS",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"parameters": [
+																		{
+																			"name": "id",
+																			"type": "Int32",
+																			"value": {
+																				"value": "@variables('idVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "fName",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('firstNameVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "lName",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('lastNameVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "city",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('cityVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "phone",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('phoneVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		}
+																	],
+																	"type": "Query",
+																	"text": "insert into [dbo].[Cust_Mexico] values(@id,@fName,@lName,@city,@phone)"
+																}
+															]
+														}
+													}
+												]
+											},
+											{
+												"value": "Germany",
+												"activities": [
+													{
+														"name": "Script_To_Add_German_Cust",
+														"type": "Script",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "AzureSqlDatabaseLS",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"parameters": [
+																		{
+																			"name": "id",
+																			"type": "Int32",
+																			"value": {
+																				"value": "@variables('idVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "fName",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('firstNameVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "lName",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('lastNameVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "city",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('cityVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "phone",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('phoneVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		}
+																	],
+																	"type": "Query",
+																	"text": "insert into [dbo].[Cust_Germany] values(@id,@fName,@lName,@city,@phone)"
+																}
+															]
+														}
+													}
+												]
+											},
+											{
+												"value": "UK",
+												"activities": [
+													{
+														"name": "Script_To_Add_UK_Cust",
+														"type": "Script",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"linkedServiceName": {
+															"referenceName": "AzureSqlDatabaseLS",
+															"type": "LinkedServiceReference"
+														},
+														"typeProperties": {
+															"scripts": [
+																{
+																	"parameters": [
+																		{
+																			"name": "Id",
+																			"type": "Int32",
+																			"value": {
+																				"value": "@variables('idVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "FirstName",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('firstNameVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "LastName",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('lastNameVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "City",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('cityVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		},
+																		{
+																			"name": "Phone",
+																			"type": "String",
+																			"value": {
+																				"value": "@variables('phoneVar')",
+																				"type": "Expression"
+																			},
+																			"direction": "Input"
+																		}
+																	],
+																	"type": "Query",
+																	"text": "insert into [dbo].[Cust_UK] values(@Id,@FirstName,@LastName,@City,@Phone)"
+																}
+															]
+														}
+													}
+												]
+											}
+										]
+									}
+								},
+								{
+									"name": "SetCountryVar",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "CountryName",
+										"value": {
+											"value": "@item().country",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetIdVar",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "idVar",
+										"value": {
+											"value": "@string(item().Id)",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetFirstNameVar",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "firstNameVar",
+										"value": {
+											"value": "@item().FirstName",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetLastNameVar",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "lastNameVar",
+										"value": {
+											"value": "@item().LastName",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetCityVar",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "cityVar",
+										"value": {
+											"value": "@item().City",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetPhoneVar",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "phoneVar",
+										"value": {
+											"value": "@item().Phone",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "Waitdemo",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 2
+									}
 								}
 							]
 						}
@@ -307,13 +740,137 @@
 						"type": "String"
 					}
 				},
+				"variables": {
+					"CountryName": {
+						"type": "String"
+					},
+					"firstNameVar": {
+						"type": "String"
+					},
+					"lastNameVar": {
+						"type": "String"
+					},
+					"cityVar": {
+						"type": "String"
+					},
+					"phoneVar": {
+						"type": "String"
+					},
+					"idVar": {
+						"type": "String"
+					},
+					"Columns": {
+						"type": "String"
+					}
+				},
 				"annotations": []
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/SqlServerTableDS')]",
+				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseLS')]",
 				"[concat(variables('factoryId'), '/datasets/SqlServerDSToPointToTables')]",
 				"[concat(variables('factoryId'), '/datasets/AzureBlobBackupDS')]",
 				"[concat(variables('factoryId'), '/datasets/AzureSqlTableDestinationDS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureBlobBackupDS')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureBlobStorageLS",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"TableName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@concat(dataset().TableName,'_',utcnow(),'.csv')",
+							"type": "Expression"
+						},
+						"folderPath": "OutputFolder",
+						"container": "miniproject"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureBlobStorageLS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureSqlTableDestinationDS')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabaseLS",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"TableNameDS": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": {
+						"value": "@dataset().TableNameDS",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseLS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SqlServerDSToPointToTables')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLServerLS",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"ServerName": "TMGLAP269",
+						"UserName": "Rohit",
+						"SqlPassword": "amol@6969"
+					}
+				},
+				"parameters": {
+					"TableNameDS": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "SqlServerTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": {
+						"value": "@dataset().TableNameDS",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/SQLServerLS')]"
 			]
 		},
 		{
@@ -375,71 +932,47 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/AzureBlobBackupDS')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
+			"name": "[concat(parameters('factoryName'), '/SQLServerLS')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
 			"apiVersion": "2018-06-01",
 			"properties": {
-				"linkedServiceName": {
-					"referenceName": "AzureBlobStorageLS",
-					"type": "LinkedServiceReference"
-				},
 				"parameters": {
-					"TableName": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@concat(dataset().TableName,'_',utcnow(),'.csv')",
-							"type": "Expression"
-						},
-						"folderPath": "OutputFolder",
-						"container": "miniproject"
+					"ServerName": {
+						"type": "String",
+						"defaultValue": "TMGLAP269"
 					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/AzureBlobStorageLS')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SqlServerDSToPointToTables')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLServerLS",
-					"type": "LinkedServiceReference",
-					"parameters": {}
-				},
-				"parameters": {
-					"TableNameDS": {
-						"type": "string"
+					"UserName": {
+						"type": "String",
+						"defaultValue": "Rohit"
+					},
+					"SqlPassword": {
+						"type": "String",
+						"defaultValue": "amol@6969"
 					}
 				},
 				"annotations": [],
-				"type": "SqlServerTable",
-				"schema": [],
+				"type": "SqlServer",
 				"typeProperties": {
-					"schema": "dbo",
-					"table": {
-						"value": "@dataset().TableNameDS",
-						"type": "Expression"
-					}
+					"connectionString": "[parameters('SQLServerLS_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "SelfHostedIR",
+					"type": "IntegrationRuntimeReference"
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLServerLS')]"
+				"[concat(variables('factoryId'), '/integrationRuntimes/SelfHostedIR')]"
 			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SelfHostedIR')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "SelfHosted",
+				"typeProperties": {}
+			},
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/AzureSqlDatabaseLS')]",
@@ -453,35 +986,6 @@
 				}
 			},
 			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/AzureSqlTableDestinationDS')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "AzureSqlDatabaseLS",
-					"type": "LinkedServiceReference"
-				},
-				"parameters": {
-					"TableNameDS": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [],
-				"typeProperties": {
-					"schema": "dbo",
-					"table": {
-						"value": "@dataset().TableNameDS",
-						"type": "Expression"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseLS')]"
-			]
 		}
 	]
 }
