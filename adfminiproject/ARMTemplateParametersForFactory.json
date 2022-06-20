@@ -5,9 +5,6 @@
 		"factoryName": {
 			"value": "adfminiproject"
 		},
-		"AzureBlobStorageLS_connectionString": {
-			"value": ""
-		},
 		"AzureSqlDatabaseLS_connectionString": {
 			"value": ""
 		},
