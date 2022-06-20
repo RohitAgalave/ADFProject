@@ -11,13 +11,17 @@
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureBlobStorageLS'"
 		},
-		"SQLServerLS_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'SQLServerLS'"
-		},
 		"AzureSqlDatabaseLS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureSqlDatabaseLS'"
+		},
+		"SqlServerLS_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'SqlServerLS'"
+		},
+		"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
+			"type": "string",
+			"defaultValue": "/subscriptions/7d21d560-a9c2-4fa4-9591-ee1ff2ac4ca3/resourcegroups/TestEnviorment/providers/Microsoft.DataFactory/factories/scopydf/integrationruntimes/selfHostedIR"
 		}
 	},
 	"variables": {
@@ -45,7 +49,7 @@
 						"typeProperties": {
 							"source": {
 								"type": "SqlServerSource",
-								"sqlReaderQuery": "select name from sys.tables",
+								"sqlReaderQuery": "select TABLE_SCHEMA as sname, TABLE_NAME as name from INFORMATION_SCHEMA.TABLES",
 								"queryTimeout": "02:00:00",
 								"partitionOption": "None"
 							},
@@ -90,7 +94,7 @@
 							"isSequential": true,
 							"activities": [
 								{
-									"name": "TableBackupActivity",
+									"name": "BackupTablesToAzureSQL",
 									"type": "Copy",
 									"dependsOn": [],
 									"policy": {
@@ -108,15 +112,17 @@
 											"partitionOption": "None"
 										},
 										"sink": {
-											"type": "DelimitedTextSink",
-											"storeSettings": {
-												"type": "AzureBlobStorageWriteSettings"
+											"type": "AzureSqlSink",
+											"writeBehavior": "upsert",
+											"upsertSettings": {
+												"useTempDB": true,
+												"keys": [
+													"ID"
+												]
 											},
-											"formatSettings": {
-												"type": "DelimitedTextWriteSettings",
-												"quoteAllText": true,
-												"fileExtension": ".txt"
-											}
+											"sqlWriterUseTableLock": false,
+											"tableOption": "autoCreate",
+											"disableMetricsCollection": false
 										},
 										"enableStaging": false,
 										"translator": {
@@ -136,29 +142,50 @@
 												"TableNameDS": {
 													"value": "@item().name",
 													"type": "Expression"
+												},
+												"SchemaNameDS": {
+													"value": "@item().sname",
+													"type": "Expression"
 												}
 											}
 										}
 									],
 									"outputs": [
 										{
-											"referenceName": "AzureBlobBackupDS",
+											"referenceName": "AzureSqlTableDestinationDS",
 											"type": "DatasetReference",
 											"parameters": {
-												"TableName": {
+												"TableNameDS": {
 													"value": "@item().name",
 													"type": "Expression"
-												}
+												},
+												"SchemaDS": "Arc"
 											}
 										}
 									]
+								},
+								{
+									"name": "Wait",
+									"type": "Wait",
+									"dependsOn": [
+										{
+											"activity": "BackupTablesToAzureSQL",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 2
+									}
 								},
 								{
 									"name": "CopyTablesToAzureSQL",
 									"type": "Copy",
 									"dependsOn": [
 										{
-											"activity": "Wait1",
+											"activity": "Wait",
 											"dependencyConditions": [
 												"Succeeded"
 											]
@@ -184,7 +211,7 @@
 											"upsertSettings": {
 												"useTempDB": true,
 												"keys": [
-													"Id"
+													"ID"
 												]
 											},
 											"sqlWriterUseTableLock": false,
@@ -209,6 +236,10 @@
 												"TableNameDS": {
 													"value": "@item().name",
 													"type": "Expression"
+												},
+												"SchemaNameDS": {
+													"value": "@item().sname",
+													"type": "Expression"
 												}
 											}
 										}
@@ -221,26 +252,14 @@
 												"TableNameDS": {
 													"value": "@item().name",
 													"type": "Expression"
+												},
+												"SchemaDS": {
+													"value": "@item().sname",
+													"type": "Expression"
 												}
 											}
 										}
 									]
-								},
-								{
-									"name": "Wait1",
-									"type": "Wait",
-									"dependsOn": [
-										{
-											"activity": "TableBackupActivity",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"waitTimeInSeconds": 2
-									}
 								}
 							]
 						}
@@ -519,7 +538,10 @@
 																}
 															],
 															"type": "NonQuery",
-															"text": "insert into @{variables('tableName')} values(@id,@fname,@lname,@city,@phone)"
+															"text": {
+																"value": "insert into @{variables('tableName')} values(@id,@fname,@lname,@city,@phone)",
+																"type": "Expression"
+															}
 														}
 													]
 												}
@@ -623,7 +645,10 @@
 													}
 												],
 												"type": "NonQuery",
-												"text": "create table @{variables('tableName')} (Id int, FirstName varchar(40), LastName varchar(40), City varchar(40), Phone varchar(40));\ninsert into @{variables('tableName')} values(@id,@fName,@lName,@city,@phone);"
+												"text": {
+													"value": "create table @{variables('tableName')} (Id int, FirstName varchar(40), LastName varchar(40), City varchar(40), Phone varchar(40));\ninsert into @{variables('tableName')} values(@id,@fName,@lName,@city,@phone);",
+													"type": "Expression"
+												}
 											}
 										]
 									}
@@ -731,7 +756,6 @@
 				"[concat(variables('factoryId'), '/datasets/SqlServerTableDS')]",
 				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabaseLS')]",
 				"[concat(variables('factoryId'), '/datasets/SqlServerDSToPointToTables')]",
-				"[concat(variables('factoryId'), '/datasets/AzureBlobBackupDS')]",
 				"[concat(variables('factoryId'), '/datasets/AzureSqlTableDestinationDS')]"
 			]
 		},
@@ -755,7 +779,7 @@
 					"location": {
 						"type": "AzureBlobStorageLocation",
 						"fileName": {
-							"value": "@concat(dataset().TableName,'_',utcnow(),'.csv')",
+							"value": "@concat('Trgr_',dataset().TableName,'_',utcnow(),'.csv')",
 							"type": "Expression"
 						},
 						"folderPath": "OutputFolder",
@@ -784,13 +808,19 @@
 				"parameters": {
 					"TableNameDS": {
 						"type": "string"
+					},
+					"SchemaDS": {
+						"type": "string"
 					}
 				},
 				"annotations": [],
 				"type": "AzureSqlTable",
 				"schema": [],
 				"typeProperties": {
-					"schema": "dbo",
+					"schema": {
+						"value": "@dataset().SchemaDS",
+						"type": "Expression"
+					},
 					"table": {
 						"value": "@dataset().TableNameDS",
 						"type": "Expression"
@@ -807,24 +837,30 @@
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"linkedServiceName": {
-					"referenceName": "SQLServerLS",
+					"referenceName": "SqlServerLS",
 					"type": "LinkedServiceReference",
 					"parameters": {
-						"ServerName": "TMGLAP269",
-						"UserName": "Rohit",
-						"SqlPassword": "amol@6969"
+						"ServerName": "AZ-VDI-D1-262",
+						"UserName": "sa",
+						"Password": "sa@123"
 					}
 				},
 				"parameters": {
 					"TableNameDS": {
 						"type": "string"
+					},
+					"SchemaNameDS": {
+						"type": "String"
 					}
 				},
 				"annotations": [],
 				"type": "SqlServerTable",
 				"schema": [],
 				"typeProperties": {
-					"schema": "dbo",
+					"schema": {
+						"value": "@dataset().SchemaNameDS",
+						"type": "Expression"
+					},
 					"table": {
 						"value": "@dataset().TableNameDS",
 						"type": "Expression"
@@ -832,7 +868,7 @@
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLServerLS')]"
+				"[concat(variables('factoryId'), '/linkedServices/SqlServerLS')]"
 			]
 		},
 		{
@@ -841,21 +877,12 @@
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"linkedServiceName": {
-					"referenceName": "SQLServerLS",
+					"referenceName": "SqlServerLS",
 					"type": "LinkedServiceReference",
 					"parameters": {
-						"ServerName": {
-							"value": "@dataset().server_name",
-							"type": "Expression"
-						},
-						"UserName": {
-							"value": "@dataset().user_name",
-							"type": "Expression"
-						},
-						"SqlPassword": {
-							"value": "@dataset().pass_word",
-							"type": "Expression"
-						}
+						"ServerName": "AZ-VDI-D1-262",
+						"UserName": "sa",
+						"Password": "sa@123"
 					}
 				},
 				"parameters": {
@@ -877,7 +904,7 @@
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLServerLS')]"
+				"[concat(variables('factoryId'), '/linkedServices/SqlServerLS')]"
 			]
 		},
 		{
@@ -894,49 +921,6 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/SQLServerLS')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"parameters": {
-					"ServerName": {
-						"type": "String",
-						"defaultValue": "TMGLAP269"
-					},
-					"UserName": {
-						"type": "String",
-						"defaultValue": "Rohit"
-					},
-					"SqlPassword": {
-						"type": "String",
-						"defaultValue": "amol@6969"
-					}
-				},
-				"annotations": [],
-				"type": "SqlServer",
-				"typeProperties": {
-					"connectionString": "[parameters('SQLServerLS_connectionString')]"
-				},
-				"connectVia": {
-					"referenceName": "SelfHostedIR",
-					"type": "IntegrationRuntimeReference"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/integrationRuntimes/SelfHostedIR')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SelfHostedIR')]",
-			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "SelfHosted",
-				"typeProperties": {}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/AzureSqlDatabaseLS')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
 			"apiVersion": "2018-06-01",
@@ -948,6 +932,74 @@
 				}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SelfHostedIR')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "SelfHosted",
+				"typeProperties": {
+					"linkedInfo": {
+						"resourceId": "[parameters('SelfHostedIR_properties_typeProperties_linkedInfo_resourceId')]",
+						"authorizationType": "Rbac"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SelfHostedIntegrationIR')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "SelfHosted",
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SelfHostedIntegrationRuntime')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "SelfHosted",
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SqlServerLS')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"ServerName": {
+						"type": "String",
+						"defaultValue": "AZ-VDI-D1-262"
+					},
+					"UserName": {
+						"type": "String",
+						"defaultValue": "sa"
+					},
+					"Password": {
+						"type": "String",
+						"defaultValue": "sa@123"
+					}
+				},
+				"annotations": [],
+				"type": "SqlServer",
+				"typeProperties": {
+					"connectionString": "[parameters('SqlServerLS_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "SelfHostedIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/integrationRuntimes/SelfHostedIntegrationRuntime')]"
+			]
 		}
 	]
 }

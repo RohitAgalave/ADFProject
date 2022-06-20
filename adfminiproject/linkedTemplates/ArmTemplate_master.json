@@ -11,13 +11,17 @@
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureBlobStorageLS'"
 		},
-		"SQLServerLS_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'SQLServerLS'"
-		},
 		"AzureSqlDatabaseLS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'AzureSqlDatabaseLS'"
+		},
+		"SqlServerLS_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'SqlServerLS'"
+		},
+		"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
+			"type": "string",
+			"defaultValue": "/subscriptions/7d21d560-a9c2-4fa4-9591-ee1ff2ac4ca3/resourcegroups/TestEnviorment/providers/Microsoft.DataFactory/factories/scopydf/integrationruntimes/selfHostedIR"
 		},
 		"containerUri": {
 			"type": "string",
@@ -52,8 +56,11 @@
 					"AzureSqlDatabaseLS_connectionString": {
 						"value": "[parameters('AzureSqlDatabaseLS_connectionString')]"
 					},
-					"SQLServerLS_connectionString": {
-						"value": "[parameters('SQLServerLS_connectionString')]"
+					"SqlServerLS_connectionString": {
+						"value": "[parameters('SqlServerLS_connectionString')]"
+					},
+					"SelfHostedIR_properties_typeProperties_linkedInfo_resourceId": {
+						"value": "[parameters('SelfHostedIR_properties_typeProperties_linkedInfo_resourceId')]"
 					}
 				}
 			},
