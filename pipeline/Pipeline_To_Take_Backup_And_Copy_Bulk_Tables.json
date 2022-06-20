@@ -679,13 +679,16 @@
 		],
 		"parameters": {
 			"serverName": {
-				"type": "String"
+				"type": "String",
+				"defaultValue": "AZ-VDI-D1-262"
 			},
 			"uName": {
-				"type": "String"
+				"type": "String",
+				"defaultValue": "sa"
 			},
 			"pass": {
-				"type": "String"
+				"type": "String",
+				"defaultValue": "sa@123"
 			}
 		},
 		"variables": {
